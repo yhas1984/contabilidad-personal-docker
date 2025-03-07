@@ -1,0 +1,57 @@
+# Eliminamos la línea de versión obsoleta
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "3001:3000"  # Cambiado a puerto 3001 en el host
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/contabilidad?schema=public
+      - NODE_ENV=production
+    volumes:
+      - pdf_storage:/app/public/pdfs
+      - ./prisma:/app/prisma
+      # Añadimos un volumen para la caché de Next.js
+      - next_cache:/app/.next/cache
+    networks:
+      - app_network
+    # Añadimos un usuario específico para evitar problemas de permisos
+    user: "node"
+
+  db:
+    image: postgres:14-alpine
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=contabilidad
+    ports:
+      - "5433:5432"  # Cambiado a puerto 5433 en el host
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+    driver: local
+  pdf_storage:
+    driver: local
+  next_cache:
+    driver: local
+
+networks:
+  app_network:
+    driver: bridge
+
+
