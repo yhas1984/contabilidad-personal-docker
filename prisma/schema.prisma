@@ -12,27 +12,31 @@ datasource db {
 }
 
 model Client {
-  id         Int           @id @default(autoincrement())
-  name       String
-  email      String        @unique
-  dni        String?       @unique
-  phone      String?
-  address    String?
-  city       String?
-  postalCode String?
-  country    String?       @default("España")
-  notes      String?
+  id           Int           @id @default(autoincrement())
+  name         String
+  email        String        @unique
+  dni          String?       @unique
+  phone        String?
+  address      String?
+  city         String?
+  postalCode   String?
+  country      String?       @default("España")
+  notes        String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
   transactions Transaction[]
 }
 
 model CompanyInfo {
-  id      Int     @id @default(autoincrement())
-  name    String
-  address String
-  phone   String
-  email   String
-  taxId   String
-  logo    String?
+  id        Int      @id @default(autoincrement())
+  name      String
+  address   String
+  phone     String
+  email     String
+  taxId     String
+  logo      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Transaction {
@@ -49,6 +53,8 @@ model Transaction {
   timestamp        DateTime
   receiptId        String   @unique
   pdfUrl           String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
   client           Client   @relation(fields: [clientId], references: [id])
   receipt          Receipt?
 }
@@ -57,6 +63,7 @@ model Receipt {
   id            Int         @id @default(autoincrement())
   receiptId     String      @unique
   createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
   transaction   Transaction @relation(fields: [transactionId], references: [id])
   transactionId Int         @unique
 }

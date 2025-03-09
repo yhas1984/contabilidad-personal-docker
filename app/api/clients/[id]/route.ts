@@ -102,3 +102,45 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   }
 }
 
+export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+  try {
+    const id = Number.parseInt(params.id)
+
+    if (isNaN(id)) {
+      return NextResponse.json({ message: "ID de cliente inválido" }, { status: 400 })
+    }
+
+    // Verificar si el cliente existe antes de intentar eliminar
+    const client = await prisma.client.findUnique({
+      where: { id },
+    })
+
+    if (!client) {
+      return NextResponse.json({ message: "Cliente no encontrado" }, { status: 404 })
+    }
+
+    // Verificar si el cliente tiene transacciones asociadas
+    const transactionCount = await prisma.transaction.count({
+      where: { clientId: id },
+    })
+
+    if (transactionCount > 0) {
+      return NextResponse.json(
+        { message: "No se puede eliminar el cliente porque tiene transacciones asociadas" },
+        { status: 400 },
+      )
+    }
+
+    // Si no hay transacciones asociadas, proceder con la eliminación
+    await prisma.client.delete({
+      where: { id },
+    })
+
+    return NextResponse.json({ message: "Cliente eliminado correctamente" })
+  } catch (error) {
+    console.error("Error al eliminar cliente:", error)
+    return NextResponse.json({ error: "Error al eliminar cliente" }, { status: 500 })
+  }
+}
+
+

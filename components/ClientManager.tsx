@@ -43,6 +43,7 @@ export function ClientManager() {
     notes: "",
   })
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [activeTab, setActiveTab] = useState("list")
 
   useEffect(() => {
     fetchClients()
@@ -74,6 +75,7 @@ export function ClientManager() {
   const handleEdit = async (client: Client) => {
     setCurrentClient(client)
     setIsEditing(true)
+    setActiveTab("form")
   }
 
   // Actualizar la función handleSubmit
@@ -119,12 +121,14 @@ export function ClientManager() {
         method: "DELETE",
       })
 
+      const data = await response.json()
+
       if (response.ok) {
-        fetchClients()
+        await fetchClients() // Refetch the clients list
         alert("Cliente eliminado exitosamente")
       } else {
-        const error = await response.json()
-        alert(`Error: ${error.message || "Ha ocurrido un error al eliminar el cliente"}`)
+        // Show the specific error message from the server
+        alert(data.message || "Ha ocurrido un error al eliminar el cliente")
       }
     } catch (error) {
       console.error("Error:", error)
@@ -246,7 +250,7 @@ export function ClientManager() {
 
   return (
     <div className="space-y-6">
-      <Tabs defaultValue="list">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="list">Lista de Clientes</TabsTrigger>
           <TabsTrigger value="form">{isEditing ? "Editar Cliente" : "Nuevo Cliente"}</TabsTrigger>
@@ -333,12 +337,24 @@ export function ClientManager() {
                           <TableCell>{client.postalCode || "-"}</TableCell>
                           <TableCell>{client.country || "España"}</TableCell>
                           <TableCell>
-                            <div className="flex gap-2">
-                              <Button variant="ghost" size="icon" onClick={() => handleEdit(client)}>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleEdit(client)}
+                                className="h-8 w-8 p-0 hover:bg-primary/10"
+                              >
                                 <Edit className="h-4 w-4" />
+                                <span className="sr-only">Editar cliente</span>
                               </Button>
-                              <Button variant="ghost" size="icon" onClick={() => client.id && handleDelete(client.id)}>
-                                <Trash2 className="h-4 w-4" />
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => client.id && handleDelete(client.id)}
+                                className="h-8 w-8 p-0 hover:bg-destructive/10"
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                                <span className="sr-only">Eliminar cliente</span>
                               </Button>
                             </div>
                           </TableCell>
@@ -444,4 +460,3 @@ export function ClientManager() {
     </div>
   )
 }
-
