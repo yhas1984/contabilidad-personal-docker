@@ -2,8 +2,7 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider      = "prisma-client-js"
-  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+  provider = "prisma-client-js"
 }
 
 datasource db {
@@ -12,31 +11,27 @@ datasource db {
 }
 
 model Client {
-  id           Int           @id @default(autoincrement())
-  name         String
-  email        String        @unique
-  dni          String?       @unique
-  phone        String?
-  address      String?
-  city         String?
-  postalCode   String?
-  country      String?       @default("España")
-  notes        String?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id         Int           @id @default(autoincrement())
+  name       String
+  email      String        @unique
+  dni        String?       @unique
+  phone      String?
+  address    String?
+  city       String?
+  postalCode String?
+  country    String?       @default("España")
+  notes      String?
   transactions Transaction[]
 }
 
 model CompanyInfo {
-  id        Int      @id @default(autoincrement())
-  name      String
-  address   String
-  phone     String
-  email     String
-  taxId     String
-  logo      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id      Int     @id @default(autoincrement())
+  name    String
+  address String
+  phone   String
+  email   String
+  taxId   String
+  logo    String?
 }
 
 model Transaction {
@@ -53,8 +48,7 @@ model Transaction {
   timestamp        DateTime
   receiptId        String   @unique
   pdfUrl           String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  emailSent        Boolean  @default(false)
   client           Client   @relation(fields: [clientId], references: [id])
   receipt          Receipt?
 }
@@ -63,7 +57,7 @@ model Receipt {
   id            Int         @id @default(autoincrement())
   receiptId     String      @unique
   createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
   transaction   Transaction @relation(fields: [transactionId], references: [id])
   transactionId Int         @unique
 }
+

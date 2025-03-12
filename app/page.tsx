@@ -20,7 +20,19 @@ import { ClientManager } from "@/components/ClientManager"
 import { generateReceiptPDF, downloadPDF } from "@/utils/pdfGenerator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import Link from "next/link"
-import { CreditCard, Users, Settings, FileText, FileBarChart, Check, TrendingUp, ArrowUp, ArrowDown } from 'lucide-react'
+import {
+  CreditCard,
+  Users,
+  Settings,
+  FileText,
+  FileBarChart,
+  Check,
+  TrendingUp,
+  ArrowUp,
+  ArrowDown,
+  Mail,
+} from "lucide-react"
+import { useToast } from "@/components/ui/use-toast"
 
 interface Client {
   id: number
@@ -54,6 +66,7 @@ interface Transaction {
   ipAddress: string
   timestamp: string
   receiptId: string
+  emailSent?: boolean
   client: Client
 }
 
@@ -68,6 +81,9 @@ export default function ContabilidadPersonal() {
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false)
+  const [isSendingEmail, setIsSendingEmail] = useState(false)
+  const [sendEmailAfterTransaction, setSendEmailAfterTransaction] = useState(false)
+  const { toast } = useToast()
 
   useEffect(() => {
     fetchClients()
@@ -174,10 +190,23 @@ export default function ContabilidadPersonal() {
           // Descargamos el PDF
           downloadPDF(pdfDataUri, `recibo-${receiptId}.pdf`)
 
-          alert(`Transacción creada exitosamente. El recibo ha sido generado y descargado.`)
+          // Si está activada la opción de enviar por correo
+          if (sendEmailAfterTransaction) {
+            await sendReceiptByEmail(receiptId, pdfDataUri, client)
+          }
+
+          toast({
+            title: "Transacción creada",
+            description: `Transacción creada exitosamente. ${sendEmailAfterTransaction ? "El recibo ha sido enviado por correo." : "El recibo ha sido generado y descargado."}`,
+            variant: "success",
+          })
         } catch (error) {
           console.error("Error al generar el PDF:", error)
-          alert("La transacción se ha registrado, pero hubo un error al generar el PDF.")
+          toast({
+            title: "Error",
+            description: "La transacción se ha registrado, pero hubo un error al generar el PDF.",
+            variant: "destructive",
+          })
         } finally {
           setIsGeneratingPDF(false)
         }
@@ -189,11 +218,68 @@ export default function ContabilidadPersonal() {
         setSelectedClientId(null)
       } else {
         console.error("Error al crear la transacción")
-        alert("Error al crear la transacción")
+        toast({
+          title: "Error",
+          description: "Error al crear la transacción",
+          variant: "destructive",
+        })
       }
     } catch (error) {
       console.error("Error al procesar la transacción:", error)
-      alert("Error al procesar la transacción")
+      toast({
+        title: "Error",
+        description: "Error al procesar la transacción",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const sendReceiptByEmail = async (receiptId: string, pdfDataUri: string, client?: Client) => {
+    if (!client && !selectedTransaction) {
+      toast({
+        title: "Error",
+        description: "No se encontró información del cliente",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsSendingEmail(true)
+    try {
+      console.log("Enviando correo para el recibo:", receiptId)
+      const response = await fetch("/api/email/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          receiptId,
+          pdfDataUri,
+        }),
+      })
+
+      if (response.ok) {
+        toast({
+          title: "Correo enviado",
+          description: `Recibo enviado correctamente a ${client?.email || selectedTransaction?.client.email}`,
+          variant: "success",
+        })
+
+        // Actualizar la lista de transacciones para reflejar que se envió el correo
+        fetchTransactions()
+      } else {
+        const error = await response.json()
+        throw new Error(error.error || "Error al enviar el correo")
+      }
+    } catch (error) {
+      console.error("Error al enviar el recibo por correo:", error)
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Error al enviar el recibo por correo",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSendingEmail(false)
     }
   }
 
@@ -225,10 +311,15 @@ export default function ContabilidadPersonal() {
     return `REC-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
   }
 
-  const generatePDFForTransaction = async (transaction: Transaction) => {
+  // Modificada para aceptar un parámetro que indica si se debe descargar el PDF
+  const generatePDFForTransaction = async (transaction: Transaction, shouldDownload = true) => {
     if (!companyInfo) {
-      alert("Por favor, configure la información de la empresa primero.")
-      return
+      toast({
+        title: "Error",
+        description: "Por favor, configure la información de la empresa primero.",
+        variant: "destructive",
+      })
+      return null
     }
 
     const client = clients.find((c) => c.id === transaction.clientId)!
@@ -243,11 +334,43 @@ export default function ContabilidadPersonal() {
         timestamp: transaction.timestamp,
       })
 
-      downloadPDF(pdfDataUri, `recibo-${transaction.receiptId}.pdf`)
+      // Solo descargar si shouldDownload es true
+      if (shouldDownload) {
+        downloadPDF(pdfDataUri, `recibo-${transaction.receiptId}.pdf`)
+      }
+
+      // Guardar el PDF generado para poder enviarlo por correo después
+      if (selectedTransaction && transaction.id === selectedTransaction.id) {
+        setSelectedTransaction({
+          ...selectedTransaction,
+          _pdfDataUri: pdfDataUri,
+        } as any)
+      }
+
+      return pdfDataUri
     } catch (error) {
       console.error("Error al generar el PDF:", error)
-      alert("Hubo un error al generar el PDF.")
+      toast({
+        title: "Error",
+        description: "Hubo un error al generar el PDF.",
+        variant: "destructive",
+      })
+      return null
     }
+  }
+
+  const handleSendEmail = async (transaction: Transaction) => {
+    // Generar el PDF si no existe, pero sin descargarlo
+    let pdfDataUri = (transaction as any)._pdfDataUri
+
+    if (!pdfDataUri) {
+      console.log("Generando PDF para enviar por correo (sin descarga)")
+      pdfDataUri = await generatePDFForTransaction(transaction, false) // Pasar false para no descargar
+      if (!pdfDataUri) return
+    }
+
+    // Enviar por correo
+    await sendReceiptByEmail(transaction.receiptId, pdfDataUri)
   }
 
   return (
@@ -344,12 +467,30 @@ export default function ContabilidadPersonal() {
                       className="border-amber-200 focus-visible:ring-amber-500"
                     />
                   </div>
+
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="sendEmail"
+                      checked={sendEmailAfterTransaction}
+                      onChange={(e) => setSendEmailAfterTransaction(e.target.checked)}
+                      className="form-checkbox h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary"
+                    />
+                    <Label htmlFor="sendEmail" className="text-sm font-medium">
+                      Enviar recibo por correo al cliente
+                    </Label>
+                  </div>
+
                   <Button
                     onClick={addTransaction}
-                    disabled={isGeneratingPDF}
+                    disabled={isGeneratingPDF || isSendingEmail}
                     className="bg-gradient-to-r from-primary to-amber-600 hover:from-primary/90 hover:to-amber-500"
                   >
-                    {isGeneratingPDF ? "Generando PDF..." : "Agregar Transacción"}
+                    {isGeneratingPDF
+                      ? "Generando PDF..."
+                      : isSendingEmail
+                        ? "Enviando correo..."
+                        : "Agregar Transacción"}
                   </Button>
                 </div>
               </CardContent>
@@ -436,6 +577,7 @@ export default function ContabilidadPersonal() {
                       <th className="text-left p-2">Costo (€)</th>
                       <th className="text-left p-2">Ganancia (€)</th>
                       <th className="text-left p-2">% Ganancia</th>
+                      <th className="text-left p-2">Email</th>
                       <th className="text-left p-2 rounded-tr-md">Detalles</th>
                     </tr>
                   </thead>
@@ -462,6 +604,25 @@ export default function ContabilidadPersonal() {
                           className={`p-2 ${t.profitPercentage > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}
                         >
                           {t.profitPercentage.toFixed(2)}%
+                        </td>
+                        <td className="p-2">
+                          {t.emailSent ? (
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              <Check className="h-3 w-3 mr-1" />
+                              Enviado
+                            </span>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 px-2 text-xs"
+                              onClick={() => handleSendEmail(t)}
+                              disabled={isSendingEmail}
+                            >
+                              <Mail className="h-3 w-3 mr-1" />
+                              Enviar
+                            </Button>
+                          )}
                         </td>
                         <td className="p-2">
                           <Dialog>
@@ -551,12 +712,30 @@ export default function ContabilidadPersonal() {
                                     Dirección IP: {selectedTransaction.ipAddress}
                                   </p>
 
-                                  <div className="mt-4">
+                                  <div className="mt-4 flex flex-col gap-2">
                                     <Button
-                                      onClick={() => generatePDFForTransaction(selectedTransaction)}
+                                      onClick={() => generatePDFForTransaction(selectedTransaction, true)}
                                       className="w-full bg-gradient-to-r from-primary to-amber-600 hover:from-primary/90 hover:to-amber-500"
                                     >
                                       Generar y Descargar Recibo PDF
+                                    </Button>
+
+                                    <Button
+                                      onClick={() => handleSendEmail(selectedTransaction)}
+                                      disabled={isSendingEmail}
+                                      className="w-full bg-blue-500 hover:bg-blue-600"
+                                    >
+                                      {isSendingEmail ? (
+                                        <>
+                                          <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-r-transparent"></div>
+                                          Enviando...
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Mail className="mr-2 h-4 w-4" />
+                                          Enviar Recibo por Email
+                                        </>
+                                      )}
                                     </Button>
                                   </div>
 

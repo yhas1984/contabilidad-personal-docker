@@ -10,7 +10,7 @@ declare module "jspdf" {
 }
 
 // Verificar si estamos en el navegador o en el servidor
-const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
+const isBrowser = typeof window !== "undefined" && typeof window.document !== "undefined"
 
 // Función para generar el PDF del recibo - Solo para el navegador
 export async function generateReceiptPDF(
@@ -256,8 +256,36 @@ export async function generateReceiptPDF(
     align: "center",
   })
 
-  // Convertir el PDF a una cadena base64
-  return doc.output("datauristring")
+  // Añadir metadatos al PDF para mejorar la compatibilidad
+  doc.setProperties({
+    title: `Recibo ${transactionData.receiptId}`,
+    subject: `Recibo de transacción - ${formatDate(transactionData.date)}`,
+    author: companyInfo.name,
+    keywords: "recibo, transacción, envío",
+    creator: "Tu Envío Express",
+  })
+
+  // Asegurar que el PDF se finalice correctamente
+  try {
+    // Convertir el PDF a una cadena base64 con el formato correcto
+    const pdfOutput = doc.output("datauristring")
+
+    // Verificar que el PDF tenga un tamaño razonable
+    const base64Data = pdfOutput.split(",")[1]
+    const pdfSize = base64Data.length * 0.75 // Estimación aproximada del tamaño en bytes
+
+    console.log(`PDF generado correctamente. Tamaño aproximado: ${Math.round(pdfSize / 1024)} KB`)
+    console.log(`Formato del data URI: ${pdfOutput.substring(0, 50)}...`)
+
+    if (pdfSize < 1000) {
+      console.warn("Advertencia: El PDF generado es muy pequeño, podría estar incompleto")
+    }
+
+    return pdfOutput
+  } catch (error) {
+    console.error("Error al generar el PDF:", error)
+    throw new Error(`Error al generar el PDF: ${error instanceof Error ? error.message : String(error)}`)
+  }
 }
 
 // Función para generar un reporte financiero - Versión para cliente y servidor
@@ -267,7 +295,7 @@ export async function generateFinancialReport(
   startDate: string,
   endDate: string,
 ): Promise<string> {
-  console.log("Entorno de ejecución:", isBrowser ? "Navegador" : "Servidor");
+  console.log("Entorno de ejecución:", isBrowser ? "Navegador" : "Servidor")
 
   // Crear un objeto JSON con los datos del reporte (para servidor)
   const createJSONReport = () => {
@@ -278,13 +306,14 @@ export async function generateFinancialReport(
         totalEurosReceived: transactions.reduce((sum, t) => sum + t.eurosReceived, 0),
         totalBsDelivered: transactions.reduce((sum, t) => sum + t.bsDelivered, 0),
         totalProfit: transactions.reduce((sum, t) => sum + (t.profit || 0), 0),
-        avgProfitPercentage: transactions.length > 0 
-          ? transactions.reduce((sum, t) => sum + (t.profitPercentage || 0), 0) / transactions.length 
-          : 0,
-        transactionCount: transactions.length
+        avgProfitPercentage:
+          transactions.length > 0
+            ? transactions.reduce((sum, t) => sum + (t.profitPercentage || 0), 0) / transactions.length
+            : 0,
+        transactionCount: transactions.length,
       },
       // Incluir solo los primeros 5 registros para el preview
-      previewTransactions: transactions.slice(0, 5).map(t => ({
+      previewTransactions: transactions.slice(0, 5).map((t) => ({
         id: t.id,
         date: t.date,
         clientName: t.client.name,
@@ -292,35 +321,33 @@ export async function generateFinancialReport(
         bsDelivered: t.bsDelivered,
         exchangeRate: t.exchangeRate,
         profit: t.profit || 0,
-        profitPercentage: t.profitPercentage || 0
-      }))
-    };
-    
+        profitPercentage: t.profitPercentage || 0,
+      })),
+    }
+
     // Convertir a base64 para simular un PDF
-    const jsonString = JSON.stringify(reportData);
-    const base64Data = isBrowser 
-      ? btoa(jsonString) 
-      : Buffer.from(jsonString).toString('base64');
-    
-    return `data:application/json;base64,${base64Data}`;
-  };
+    const jsonString = JSON.stringify(reportData)
+    const base64Data = isBrowser ? btoa(jsonString) : Buffer.from(jsonString).toString("base64")
+
+    return `data:application/json;base64,${base64Data}`
+  }
 
   // Si estamos en el servidor, devolver el formato JSON
   if (!isBrowser) {
-    console.log("Generando reporte en formato JSON (servidor)");
-    return createJSONReport();
+    console.log("Generando reporte en formato JSON (servidor)")
+    return createJSONReport()
   }
 
   // IMPORTANTE: Estamos en el navegador, verificamos que jsPDF y autoTable estén disponibles
-  if (typeof jsPDF === 'undefined') {
-    console.error("jsPDF no está disponible en este entorno");
-    return createJSONReport();
+  if (typeof jsPDF === "undefined") {
+    console.error("jsPDF no está disponible en este entorno")
+    return createJSONReport()
   }
 
   try {
-    console.log("Generando reporte en formato PDF (navegador)");
+    console.log("Generando reporte en formato PDF (navegador)")
     // Si estamos en el navegador, generar el PDF real
-    const doc = new jsPDF();
+    const doc = new jsPDF()
 
     // Configurar fuentes y colores
     const primaryColor = "#3b82f6" // Azul
@@ -425,8 +452,9 @@ export async function generateFinancialReport(
 
     // Calcular rentabilidad promedio
     const avgProfitPercentage =
-      transactions.length > 0 ? 
-      transactions.reduce((sum, t) => sum + (t.profitPercentage || 0), 0) / transactions.length : 0
+      transactions.length > 0
+        ? transactions.reduce((sum, t) => sum + (t.profitPercentage || 0), 0) / transactions.length
+        : 0
 
     doc.text(`Rentabilidad Promedio: ${avgProfitPercentage.toFixed(2)}%`, 20, 89)
 
@@ -449,9 +477,9 @@ export async function generateFinancialReport(
     ])
 
     // Verificar si autoTable está disponible
-    if (typeof doc.autoTable === 'function') {
+    if (typeof doc.autoTable === "function") {
       // Usar autoTable si está disponible
-      console.log("Usando autoTable para la tabla del reporte");
+      console.log("Usando autoTable para la tabla del reporte")
       doc.autoTable({
         head: [tableColumn],
         body: tableRows,
@@ -474,53 +502,54 @@ export async function generateFinancialReport(
         alternateRowStyles: {
           fillColor: [245, 247, 250],
         },
-      });
+      })
     } else {
       // Si autoTable no está disponible, crear una tabla manual básica
-      console.warn("autoTable no está disponible, creando tabla manual");
-      let yPos = 110;
-      const cellHeight = 8;
-      const cellPadding = 2;
-      
+      console.warn("autoTable no está disponible, creando tabla manual")
+      let yPos = 110
+      const cellHeight = 8
+      const cellPadding = 2
+
       // Encabezado
-      doc.setFillColor(59, 130, 246); // Color azul primario
-      doc.setTextColor(255, 255, 255); // Texto blanco
-      doc.rect(15, yPos, 180, cellHeight, "F");
-      
-      let xPos = 15;
-      const columnWidths = [25, 40, 20, 25, 20, 25, 25]; // Ancho de cada columna
-      
+      doc.setFillColor(59, 130, 246) // Color azul primario
+      doc.setTextColor(255, 255, 255) // Texto blanco
+      doc.rect(15, yPos, 180, cellHeight, "F")
+
+      let xPos = 15
+      const columnWidths = [25, 40, 20, 25, 20, 25, 25] // Ancho de cada columna
+
       // Cabeceras de la tabla
-      doc.setFontSize(8);
+      doc.setFontSize(8)
       for (let i = 0; i < tableColumn.length; i++) {
-        doc.text(tableColumn[i], xPos + cellPadding, yPos + cellPadding + 4);
-        xPos += columnWidths[i];
+        doc.text(tableColumn[i], xPos + cellPadding, yPos + cellPadding + 4)
+        xPos += columnWidths[i]
       }
-      
-      yPos += cellHeight;
-      
+
+      yPos += cellHeight
+
       // Filas de datos
-      doc.setTextColor(80);
-      for (let i = 0; i < Math.min(tableRows.length, 20); i++) { // Limitamos a 20 filas para no desbordar la página
-        xPos = 15;
-        
+      doc.setTextColor(80)
+      for (let i = 0; i < Math.min(tableRows.length, 20); i++) {
+        // Limitamos a 20 filas para no desbordar la página
+        xPos = 15
+
         // Alternar colores de fondo
         if (i % 2 === 0) {
-          doc.setFillColor(245, 247, 250);
-          doc.rect(15, yPos, 180, cellHeight, "F");
+          doc.setFillColor(245, 247, 250)
+          doc.rect(15, yPos, 180, cellHeight, "F")
         }
-        
+
         for (let j = 0; j < tableRows[i].length; j++) {
-          doc.text(tableRows[i][j].toString(), xPos + cellPadding, yPos + cellPadding + 4);
-          xPos += columnWidths[j];
+          doc.text(tableRows[i][j].toString(), xPos + cellPadding, yPos + cellPadding + 4)
+          xPos += columnWidths[j]
         }
-        
-        yPos += cellHeight;
-        
+
+        yPos += cellHeight
+
         // Si llegamos al final de la página, detenemos
         if (yPos > 270) {
-          doc.text("... y más registros", 105, yPos + 5, { align: "center" });
-          break;
+          doc.text("... y más registros", 105, yPos + 5, { align: "center" })
+          break
         }
       }
     }
@@ -539,12 +568,12 @@ export async function generateFinancialReport(
 
     // Convertir el PDF a una cadena base64
     const pdfOutput = doc.output("datauristring")
-    console.log("PDF generado exitosamente con URI que comienza con:", pdfOutput.substring(0, 50) + "...");
-    return pdfOutput;
+    console.log("PDF generado exitosamente con URI que comienza con:", pdfOutput.substring(0, 50) + "...")
+    return pdfOutput
   } catch (error) {
-    console.error("Error al generar el PDF en el navegador:", error);
+    console.error("Error al generar el PDF en el navegador:", error)
     // Si falla la generación del PDF, devolver el formato JSON como respaldo
-    return createJSONReport();
+    return createJSONReport()
   }
 }
 
@@ -552,10 +581,10 @@ export async function generateFinancialReport(
 export function downloadPDF(dataUri: string | Promise<string>, filename: string) {
   // Esta función solo debe ejecutarse en el navegador
   if (!isBrowser) {
-    console.error("La función downloadPDF solo puede ser utilizada en el navegador");
-    return;
+    console.error("La función downloadPDF solo puede ser utilizada en el navegador")
+    return
   }
-  
+
   // Si dataUri es una promesa, esperar a que se resuelva
   if (dataUri instanceof Promise) {
     dataUri
@@ -599,3 +628,4 @@ function formatCurrency(amount: number, currency: string) {
     minimumFractionDigits: 2,
   }).format(amount)
 }
+
